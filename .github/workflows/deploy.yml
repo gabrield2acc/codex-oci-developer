@@ -45,20 +45,37 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.oci"
-          # Prefer already base64-encoded secrets if present
-          if [ -n "${OCI_PRIVATE_KEY_B64:-}" ]; then
-            TF_B64_KEY="$OCI_PRIVATE_KEY_B64"
-          elif [ -n "${OCI_PRIVATE_KEY_PEM:-}" ]; then
-            TF_B64_KEY="$OCI_PRIVATE_KEY_PEM"
-          elif [ -n "${OCI_PRIVATE_KEY:-}" ]; then
-            # If raw PEM provided, both write file (fallback) and base64-encode for TF
-            printf "%s" "$OCI_PRIVATE_KEY" > "$HOME/.oci/oci_api_key.pem"
-            chmod 600 "$HOME/.oci/oci_api_key.pem"
-            TF_B64_KEY=$(printf "%s" "$OCI_PRIVATE_KEY" | base64 | tr -d '\n')
+          KEY_PEM=""
+          try_decode_to_pem() {
+            local data="$1"
+            # First try base64-decode
+            if printf "%s" "$data" | base64 -d >/tmp/key.pem 2>/dev/null && grep -q "BEGIN .*PRIVATE KEY" /tmp/key.pem; then
+              cat /tmp/key.pem
+              return 0
+            fi
+            # If not base64, maybe it's raw PEM already
+            if printf "%s" "$data" | grep -q "BEGIN .*PRIVATE KEY"; then
+              printf "%s" "$data"
+              return 0
+            fi
+            return 1
+          }
+
+          if [ -n "${OCI_PRIVATE_KEY_B64:-}" ] && KEY_PEM=$(try_decode_to_pem "$OCI_PRIVATE_KEY_B64"); then
+            :
+          elif [ -n "${OCI_PRIVATE_KEY_PEM:-}" ] && KEY_PEM=$(try_decode_to_pem "$OCI_PRIVATE_KEY_PEM"); then
+            :
+          elif [ -n "${OCI_PRIVATE_KEY:-}" ] && KEY_PEM=$(try_decode_to_pem "$OCI_PRIVATE_KEY"); then
+            :
           else
-            echo "No OCI private key secret provided" >&2
+            echo "Could not detect/parse OCI private key from provided secrets. Ensure it is raw PEM or base64 of PEM." >&2
             exit 1
           fi
+
+          # Write canonical PEM file and export vars
+          printf "%s" "$KEY_PEM" > "$HOME/.oci/oci_api_key.pem"
+          chmod 600 "$HOME/.oci/oci_api_key.pem"
+          TF_B64_KEY=$(printf "%s" "$KEY_PEM" | base64 | tr -d '\n')
           echo "OCI_PRIVATE_KEY_PATH=$HOME/.oci/oci_api_key.pem" >> $GITHUB_ENV
           echo "TF_VAR_private_key=$TF_B64_KEY" >> $GITHUB_ENV
 
