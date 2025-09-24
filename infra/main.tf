@@ -115,6 +115,24 @@ data "oci_core_images" "ol9_aarch64" {
   sort_order               = "DESC"
 }
 
+data "oci_core_images" "ol8_aarch64" {
+  compartment_id           = var.compartment_ocid
+  operating_system         = "Oracle Linux"
+  operating_system_version = "8"
+  shape                    = var.shape
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
+}
+
+data "oci_core_images" "ubuntu_2204" {
+  compartment_id           = var.compartment_ocid
+  operating_system         = "Canonical Ubuntu"
+  operating_system_version = "22.04"
+  shape                    = var.shape
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
+}
+
 resource "random_password" "rdp_password" {
   length  = 16
   special = false
@@ -128,6 +146,10 @@ locals {
     ssh_key_block = local.ssh_key_block
     rdp_password  = local.effective_rdp_password
   })
+
+  chosen_image_id = can(data.oci_core_images.ol9_aarch64.images[0].id) ? data.oci_core_images.ol9_aarch64.images[0].id : (
+    can(data.oci_core_images.ol8_aarch64.images[0].id) ? data.oci_core_images.ol8_aarch64.images[0].id : (
+  data.oci_core_images.ubuntu_2204.images[0].id))
 }
 
 resource "oci_core_instance" "dev" {
@@ -153,7 +175,7 @@ resource "oci_core_instance" "dev" {
 
   source_details {
     source_type             = "image"
-    source_id               = data.oci_core_images.ol9_aarch64.images[0].id
+    source_id               = local.chosen_image_id
     boot_volume_size_in_gbs = 100
   }
 
