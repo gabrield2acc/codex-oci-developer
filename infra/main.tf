@@ -124,10 +124,11 @@ resource "random_password" "rdp_password" {
 
 locals {
   ssh_key_block = var.ssh_public_key != "" ? "ssh_authorized_keys:\n      - ${var.ssh_public_key}" : ""
+  effective_rdp_password = var.ssh_public_key != "" ? "" : random_password.rdp_password.result
 
   cloud_init = templatefile("${path.module}/cloud-init.yaml.tmpl", {
     ssh_key_block = local.ssh_key_block
-    rdp_password  = random_password.rdp_password.result
+    rdp_password  = local.effective_rdp_password
   })
 }
 

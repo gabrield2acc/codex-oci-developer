@@ -119,8 +119,10 @@ runcmd:
     chmod +x /home/opc/.Xclients
     chown opc:opc /home/opc/.Xclients
 
-    # Set password for opc (for xrdp). SSH remains key-only.
-    echo 'opc:${rdp_password}' | chpasswd
+    # Set password for opc (for xrdp) only when provided. SSH remains key-only.
+    if [ -n "${rdp_password}" ]; then
+      echo 'opc:${rdp_password}' | chpasswd
+    fi
     sed -i 's/^PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
     systemctl reload sshd || true
 
