@@ -99,7 +99,7 @@ resource "oci_core_subnet" "public" {
   display_name      = "dev-workstation-public"
   route_table_id    = oci_core_route_table.rt.id
   security_list_ids = [oci_core_security_list.sl.id]
-  dns_label         = "pub" 
+  dns_label         = "pub"
   prohibit_public_ip_on_vnic = false
 }
 
