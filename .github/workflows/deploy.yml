@@ -111,7 +111,7 @@ jobs:
           fi
 
           # Desired OCPUs (default 2). May fallback to 1 if capacity issues persist.
-          OCPUS_DESIRED="${OCI_OCPU:-2}"
+          OCPUS_DESIRED="${OCI_OCPU:-1}"
           SHAPE_PRIMARY="${OCI_SHAPE_PRIMARY:-VM.Standard.A1.Flex}"
 
           attempt_apply() {

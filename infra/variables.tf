@@ -72,13 +72,13 @@ variable "public_subnet_cidr" {
 variable "ocpus" {
   description = "Number of OCPUs for A1 Flex"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "memory_gbs" {
   description = "Memory (GB) for A1 Flex"
   type        = number
-  default     = 12
+  default     = 6
 }
 
 variable "shape" {
