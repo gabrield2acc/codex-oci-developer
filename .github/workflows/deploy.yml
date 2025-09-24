@@ -98,8 +98,8 @@ jobs:
           if [ -n "${OCI_REGION_CANDIDATES:-}" ]; then
             REGIONS="$OCI_REGION_CANDIDATES"
           else
-            # Default region preference order near UK-LONDON-1
-            REGIONS="uk-london-1 eu-amsterdam-1 eu-frankfurt-1 eu-dublin-1 eu-paris-1 eu-milan-1"
+            # For this run, try one region only
+            REGIONS="eu-amsterdam-1"
           fi
 
           # Build AD candidates. If a specific AD is provided, try only that.
