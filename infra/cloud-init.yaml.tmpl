@@ -1,0 +1,127 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+timezone: Etc/UTC
+
+users:
+  - default
+  - name: opc
+    lock_passwd: false
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ${ssh_key_block}
+
+write_files:
+  - path: /etc/sysctl.d/99-docker.conf
+    permissions: '0644'
+    content: |
+      vm.max_map_count=262144
+  - path: /opt/monitoring/docker-compose.yml
+    permissions: '0644'
+    content: |
+      services:
+        node-exporter:
+          image: prom/node-exporter:v1.8.1
+          command:
+            - --path.rootfs=/host
+          pid: host
+          network_mode: host
+          volumes:
+            - /:/host:ro,rslave
+          restart: unless-stopped
+        cadvisor:
+          image: gcr.io/cadvisor/cadvisor:v0.47.2
+          command:
+            - --housekeeping_interval=10s
+          network_mode: host
+          privileged: true
+          volumes:
+            - /:/rootfs:ro
+            - /var/run:/var/run:rw
+            - /sys:/sys:ro
+            - /var/lib/docker/:/var/lib/docker:ro
+          restart: unless-stopped
+        prometheus:
+          image: prom/prometheus:v2.55.0
+          network_mode: host
+          volumes:
+            - /opt/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+          restart: unless-stopped
+        grafana:
+          image: grafana/grafana-oss:11.2.0
+          user: "472"
+          network_mode: host
+          volumes:
+            - grafana-data:/var/lib/grafana
+          restart: unless-stopped
+      volumes:
+        grafana-data:
+
+  - path: /opt/monitoring/prometheus.yml
+    permissions: '0644'
+    content: |
+      global:
+        scrape_interval: 15s
+      scrape_configs:
+        - job_name: 'node'
+          static_configs:
+            - targets: ['localhost:9100']
+        - job_name: 'cadvisor'
+          static_configs:
+            - targets: ['localhost:8080']
+
+runcmd:
+  - |
+    set -euxo pipefail
+    dnf -y install oracle-epel-release-el9
+    dnf -y groupinstall "Xfce" || dnf -y install xfce4-session xfce4-terminal thunar
+    dnf -y install xrdp xorgxrdp
+    systemctl enable --now xrdp
+    # Allow RDP in firewalld
+    firewall-cmd --permanent --add-service=rdp || firewall-cmd --permanent --add-port=3389/tcp || true
+    firewall-cmd --permanent --add-service=ssh || true
+    firewall-cmd --reload || true
+
+    # VSCodium repo (code-oss equivalent)
+    rpm --import https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/-/raw/master/pub.gpg || true
+    cat >/etc/yum.repos.d/vscodium.repo <<'EOF'
+    [gitlab.com_paulcarroty_vscodium_repo]
+    name=VSCodium Repository
+    baseurl=https://download.vscodium.com/rpms/
+    enabled=1
+    gpgcheck=1
+    gpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/-/raw/master/pub.gpg
+    EOF
+    dnf -y install codium || true
+
+    # Node.js LTS (module stream 20)
+    dnf -y module reset nodejs
+    dnf -y module enable nodejs:20
+    dnf -y install nodejs
+
+    # Python dev utils
+    dnf -y install python3 python3-pip python3-virtualenv
+
+    # Docker CE + compose plugin
+    dnf -y install dnf-plugins-core
+    dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    dnf -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    systemctl enable --now docker
+    usermod -aG docker opc || true
+
+    # Monitoring stack
+    mkdir -p /opt/monitoring
+    docker compose -f /opt/monitoring/docker-compose.yml up -d || true
+
+    # Ensure xrdp uses Xorg
+    sed -i 's/^#use_vsock/use_vsock/g' /etc/xrdp/xrdp.ini || true
+    echo xfce4-session > /home/opc/.Xclients
+    chmod +x /home/opc/.Xclients
+    chown opc:opc /home/opc/.Xclients
+
+    # Set password for opc (for xrdp). SSH remains key-only.
+    echo 'opc:${rdp_password}' | chpasswd
+    sed -i 's/^PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+    systemctl reload sshd || true
+
+final_message: "Cloud-init completed. RDP ready on port 3389."

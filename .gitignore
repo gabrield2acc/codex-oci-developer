@@ -1,0 +1,16 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+override.tf
+override.tf.json
+terraform.tfvars
+terraform.tfstate.backup
+
+# Outputs (keep tracked by CI)
+
+# Mac/Editor junk
+.DS_Store
+.vscode/

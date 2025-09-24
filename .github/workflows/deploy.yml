@@ -1,0 +1,92 @@
+name: Deploy OCI Workstation
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # OCI Provider envs
+      OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+      OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+      OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+      OCI_REGION: ${{ secrets.OCI_REGION }}
+      OCI_COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
+      SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+
+      # Terraform variables
+      TF_VAR_compartment_ocid: ${{ secrets.OCI_COMPARTMENT_OCID }}
+      TF_VAR_region: ${{ secrets.OCI_REGION }}
+      TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write OCI private key
+        id: write_key
+        shell: bash
+        env:
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p $HOME/.oci
+          echo "$OCI_PRIVATE_KEY" > $HOME/.oci/oci_api_key.pem
+          chmod 600 $HOME/.oci/oci_api_key.pem
+          echo "OCI_PRIVATE_KEY_PATH=$HOME/.oci/oci_api_key.pem" >> $GITHUB_ENV
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Terraform Init
+        working-directory: infra
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        working-directory: infra
+        run: |
+          terraform fmt -check
+          terraform validate
+
+      - name: Terraform Apply
+        working-directory: infra
+        env:
+          OCI_PRIVATE_KEY_PATH: ${{ env.OCI_PRIVATE_KEY_PATH }}
+        run: terraform apply -auto-approve -input=false
+
+      - name: Save outputs to repo
+        shell: bash
+        working-directory: infra
+        run: |
+          set -euo pipefail
+          mkdir -p ../deployment
+          terraform output -json > ../deployment/outputs.json
+          cd ..
+          git config user.email "actions@github.com"
+          git config user.name "github-actions"
+          git add deployment/outputs.json
+          git commit -m "chore: save outputs [skip ci]" || echo "No changes to commit"
+          git push
+
+      - name: Job summary
+        shell: bash
+        run: |
+          echo "### Deployment Outputs" >> $GITHUB_STEP_SUMMARY
+          if [ -f deployment/outputs.json ]; then
+            IP=$(jq -r .public_ip.value deployment/outputs.json)
+            USER=$(jq -r .rdp_username.value deployment/outputs.json)
+            echo "Public IP: $IP" >> $GITHUB_STEP_SUMMARY
+            echo "RDP user: $USER" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "outputs.json not found." >> $GITHUB_STEP_SUMMARY
+          fi
+
