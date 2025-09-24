@@ -34,6 +34,7 @@ resource "oci_core_vcn" "vcn" {
   cidr_block     = var.vcn_cidr
   compartment_id = var.compartment_ocid
   display_name   = "dev-workstation-vcn"
+  dns_label      = "devws"
   freeform_tags  = var.tags
 }
 
