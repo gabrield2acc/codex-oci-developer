@@ -93,13 +93,13 @@ resource "oci_core_security_list" "sl" {
 }
 
 resource "oci_core_subnet" "public" {
-  cidr_block        = var.public_subnet_cidr
-  compartment_id    = var.compartment_ocid
-  vcn_id            = oci_core_vcn.vcn.id
-  display_name      = "dev-workstation-public"
-  route_table_id    = oci_core_route_table.rt.id
-  security_list_ids = [oci_core_security_list.sl.id]
-  dns_label         = "pub"
+  cidr_block                 = var.public_subnet_cidr
+  compartment_id             = var.compartment_ocid
+  vcn_id                     = oci_core_vcn.vcn.id
+  display_name               = "dev-workstation-public"
+  route_table_id             = oci_core_route_table.rt.id
+  security_list_ids          = [oci_core_security_list.sl.id]
+  dns_label                  = "pub"
   prohibit_public_ip_on_vnic = false
 }
 
@@ -118,7 +118,7 @@ resource "random_password" "rdp_password" {
 }
 
 locals {
-  ssh_key_block = var.ssh_public_key != "" ? "ssh_authorized_keys:\n      - ${var.ssh_public_key}" : ""
+  ssh_key_block          = var.ssh_public_key != "" ? "ssh_authorized_keys:\n      - ${var.ssh_public_key}" : ""
   effective_rdp_password = var.ssh_public_key != "" ? "" : random_password.rdp_password.result
 
   cloud_init = templatefile("${path.module}/cloud-init.yaml.tmpl", {
