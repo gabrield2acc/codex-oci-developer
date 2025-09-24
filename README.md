@@ -27,6 +27,11 @@ GitHub Actions expects these repository secrets:
 - `OCI_COMPARTMENT_OCID`
 - Optional: `SSH_PUBLIC_KEY` (recommended). If omitted, an RDP password is generated.
 
+Optional tuning secrets for CI retries:
+- `OCI_REGION_CANDIDATES`: space-separated list of regions to try (e.g., `uk-london-1 eu-frankfurt-1 eu-amsterdam-1`).
+- `OCI_AD_INDEX`: prefer a specific AD index (0-based).
+- `OCI_OCPU`: desired OCPUs (default 2); CI falls back to 1 on capacity errors.
+
 Terraform variables (with safe defaults) are in `infra/variables.tf` and can be overridden with TF vars if needed.
 
 Outputs

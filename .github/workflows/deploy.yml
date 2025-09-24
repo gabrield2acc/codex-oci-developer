@@ -77,7 +77,7 @@ jobs:
           terraform fmt -check
           terraform validate
 
-      - name: Terraform Apply with AD/OCPU retries
+      - name: Terraform Apply with Region/AD/OCPU retries
         working-directory: infra
         env:
           OCI_PRIVATE_KEY_PATH: ${{ env.OCI_PRIVATE_KEY_PATH }}
@@ -85,49 +85,82 @@ jobs:
           # Optional overrides
           OCI_AD_INDEX: ${{ secrets.OCI_AD_INDEX }}
           OCI_OCPU: ${{ secrets.OCI_OCPU }}
+          OCI_REGION_CANDIDATES: ${{ secrets.OCI_REGION_CANDIDATES }}
         shell: bash
         run: |
           set -euo pipefail
           terraform version
           terraform workspace show || true
           
+          # Build region candidates: use secret list (space-separated) or the configured region.
+          if [ -n "${OCI_REGION_CANDIDATES:-}" ]; then
+            REGIONS="$OCI_REGION_CANDIDATES"
+          else
+            REGIONS="${OCI_REGION}"
+          fi
+
           # Build AD candidates. If a specific AD is provided, try only that.
           if [ -n "${OCI_AD_INDEX:-}" ]; then
-            CANDIDATES="$OCI_AD_INDEX"
+            AD_CANDIDATES="$OCI_AD_INDEX"
           else
-            CANDIDATES="0 1 2"
+            AD_CANDIDATES="0 1 2"
           fi
+
           # Desired OCPUs (default 2). May fallback to 1 if capacity issues persist.
-          OCPUS="${OCI_OCPU:-2}"
+          OCPUS_DESIRED="${OCI_OCPU:-2}"
 
           attempt_apply() {
-            local ad_idx="$1"; local ocpus="$2"
-            echo "Attempting apply: ad_index=$ad_idx ocpus=$ocpus"
+            local region="$1"; local ad_idx="$2"; local ocpus="$3"
+            echo "Attempting apply: region=$region ad_index=$ad_idx ocpus=$ocpus"
             set +e
             terraform apply -auto-approve -input=false \
-              -var "ad_index=${ad_idx}" -var "ocpus=${ocpus}"
+              -var "region=${region}" -var "ad_index=${ad_idx}" -var "ocpus=${ocpus}"
             rc=$?
             set -e
             return $rc
           }
 
+          cleanup_region() {
+            local region="$1"
+            echo "Cleaning up resources in region $region"
+            set +e
+            terraform destroy -auto-approve -input=false -var "region=${region}"
+            set -e || true
+          }
+
           success=0
-          # First pass: desired OCPUs
-          for ad in $CANDIDATES; do
-            if attempt_apply "$ad" "$OCPUS"; then success=1; break; fi
-          done
-          # Second pass: fallback to 1 OCPU if still not successful
-          if [ $success -eq 0 ] && [ "$OCPUS" != "1" ]; then
-            echo "Retrying with fallback OCPUs=1 due to potential capacity constraints"
-            for ad in $CANDIDATES; do
-              if attempt_apply "$ad" "1"; then success=1; break; fi
+          SELECTED_SUMMARY=""
+          for r in $REGIONS; do
+            echo "Reconfiguring provider for region: $r"
+            terraform init -reconfigure -input=false
+
+            # First pass: desired OCPUs
+            for ad in $AD_CANDIDATES; do
+              if attempt_apply "$r" "$ad" "$OCPUS_DESIRED"; then
+                success=1; SELECTED_SUMMARY="region=$r ad=$ad ocpus=$OCPUS_DESIRED"; break 2
+              fi
             done
-          fi
+
+            # Second pass: fallback to 1 OCPU
+            if [ "$OCPUS_DESIRED" != "1" ]; then
+              echo "Retrying region $r with fallback OCPUs=1 due to capacity"
+              for ad in $AD_CANDIDATES; do
+                if attempt_apply "$r" "$ad" "1"; then
+                  success=1; SELECTED_SUMMARY="region=$r ad=$ad ocpus=1"; break 2
+                fi
+              done
+            fi
+
+            # If we reach here, region failed; cleanup and try next region
+            cleanup_region "$r" || true
+          done
 
           if [ $success -eq 0 ]; then
-            echo "Terraform apply failed across all AD/OCPU attempts" >&2
+            echo "Terraform apply failed across all Region/AD/OCPU attempts" >&2
             exit 1
           fi
+          echo "Selected deployment: $SELECTED_SUMMARY"
+          echo "DEPLOYMENT_CHOICE=$SELECTED_SUMMARY" >> $GITHUB_ENV
 
       - name: Save outputs to repo
         shell: bash
@@ -152,6 +185,7 @@ jobs:
             USER=$(jq -r .rdp_username.value deployment/outputs.json)
             echo "Public IP: $IP" >> $GITHUB_STEP_SUMMARY
             echo "RDP user: $USER" >> $GITHUB_STEP_SUMMARY
+            echo "Selection: ${DEPLOYMENT_CHOICE:-unknown}" >> $GITHUB_STEP_SUMMARY
           else
             echo "outputs.json not found." >> $GITHUB_STEP_SUMMARY
           fi
