@@ -110,7 +110,7 @@ data "oci_core_images" "ol9_aarch64" {
   compartment_id           = var.compartment_ocid
   operating_system         = "Oracle Linux"
   operating_system_version = "9"
-  shape                    = "VM.Standard.A1.Flex"
+  shape                    = var.shape
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
 }
@@ -134,11 +134,14 @@ resource "oci_core_instance" "dev" {
   availability_domain = local.ad_name
   compartment_id      = var.compartment_ocid
   display_name        = var.display_name
-  shape               = "VM.Standard.A1.Flex"
+  shape               = var.shape
 
-  shape_config {
-    ocpus         = var.ocpus
-    memory_in_gbs = var.memory_gbs
+  dynamic "shape_config" {
+    for_each = contains(var.shape, ".Flex") ? [1] : []
+    content {
+      ocpus         = var.ocpus
+      memory_in_gbs = var.memory_gbs
+    }
   }
 
   create_vnic_details {

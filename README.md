@@ -54,3 +54,12 @@ Project layout
 Notes
 - Oracle Linux user: `opc` (default). SSH remains key-only; password is used for xrdp only.
 - The monitoring stack is local to the VM by default. To expose Grafana/Prometheus, add rules to the security list and firewall.
+
+Capacity fallbacks
+- Primary shape defaults to `VM.Standard.A1.Flex` (ARM). CI can auto-fallback to `VM.Standard.E4.Flex` (x86) if A1 capacity is unavailable.
+- Configure optional secrets to influence retries:
+  - `OCI_REGION_CANDIDATES`: space-separated list of regions to try in order.
+  - `OCI_AD_INDEX`: pin a specific AD index.
+  - `OCI_OCPU`: desired OCPUs (default 2).
+  - `OCI_SHAPE_PRIMARY`: override primary shape (default A1 Flex).
+  - `OCI_SHAPE_FALLBACK`: override fallback shape (default E4 Flex).

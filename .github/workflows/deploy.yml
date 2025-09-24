@@ -86,6 +86,8 @@ jobs:
           OCI_AD_INDEX: ${{ secrets.OCI_AD_INDEX }}
           OCI_OCPU: ${{ secrets.OCI_OCPU }}
           OCI_REGION_CANDIDATES: ${{ secrets.OCI_REGION_CANDIDATES }}
+          OCI_SHAPE_PRIMARY: ${{ secrets.OCI_SHAPE_PRIMARY }}
+          OCI_SHAPE_FALLBACK: ${{ secrets.OCI_SHAPE_FALLBACK }}
         shell: bash
         run: |
           set -euo pipefail
@@ -108,13 +110,15 @@ jobs:
 
           # Desired OCPUs (default 2). May fallback to 1 if capacity issues persist.
           OCPUS_DESIRED="${OCI_OCPU:-2}"
+          SHAPE_PRIMARY="${OCI_SHAPE_PRIMARY:-VM.Standard.A1.Flex}"
+          SHAPE_FALLBACK="${OCI_SHAPE_FALLBACK:-VM.Standard.E4.Flex}"
 
           attempt_apply() {
-            local region="$1"; local ad_idx="$2"; local ocpus="$3"
-            echo "Attempting apply: region=$region ad_index=$ad_idx ocpus=$ocpus"
+            local region="$1"; local ad_idx="$2"; local ocpus="$3"; local shape="$4"
+            echo "Attempting apply: region=$region ad_index=$ad_idx ocpus=$ocpus shape=$shape"
             set +e
             terraform apply -auto-approve -input=false \
-              -var "region=${region}" -var "ad_index=${ad_idx}" -var "ocpus=${ocpus}"
+              -var "region=${region}" -var "ad_index=${ad_idx}" -var "ocpus=${ocpus}" -var "shape=${shape}"
             rc=$?
             set -e
             return $rc
@@ -136,8 +140,8 @@ jobs:
 
             # First pass: desired OCPUs
             for ad in $AD_CANDIDATES; do
-              if attempt_apply "$r" "$ad" "$OCPUS_DESIRED"; then
-                success=1; SELECTED_SUMMARY="region=$r ad=$ad ocpus=$OCPUS_DESIRED"; break 2
+              if attempt_apply "$r" "$ad" "$OCPUS_DESIRED" "$SHAPE_PRIMARY"; then
+                success=1; SELECTED_SUMMARY="region=$r ad=$ad ocpus=$OCPUS_DESIRED shape=$SHAPE_PRIMARY"; break 2
               fi
             done
 
@@ -145,8 +149,28 @@ jobs:
             if [ "$OCPUS_DESIRED" != "1" ]; then
               echo "Retrying region $r with fallback OCPUs=1 due to capacity"
               for ad in $AD_CANDIDATES; do
-                if attempt_apply "$r" "$ad" "1"; then
-                  success=1; SELECTED_SUMMARY="region=$r ad=$ad ocpus=1"; break 2
+                if attempt_apply "$r" "$ad" "1" "$SHAPE_PRIMARY"; then
+                  success=1; SELECTED_SUMMARY="region=$r ad=$ad ocpus=1 shape=$SHAPE_PRIMARY"; break 2
+                fi
+              done
+            fi
+
+            # Third pass: fallback shape with desired OCPUs
+            if [ $success -eq 0 ]; then
+              echo "Retrying region $r with fallback shape=$SHAPE_FALLBACK, ocpus=$OCPUS_DESIRED"
+              for ad in $AD_CANDIDATES; do
+                if attempt_apply "$r" "$ad" "$OCPUS_DESIRED" "$SHAPE_FALLBACK"; then
+                  success=1; SELECTED_SUMMARY="region=$r ad=$ad ocpus=$OCPUS_DESIRED shape=$SHAPE_FALLBACK"; break 2
+                fi
+              done
+            fi
+
+            # Fourth pass: fallback shape + 1 OCPU
+            if [ $success -eq 0 ] && [ "$OCPUS_DESIRED" != "1" ]; then
+              echo "Retrying region $r with fallback shape=$SHAPE_FALLBACK, ocpus=1"
+              for ad in $AD_CANDIDATES; do
+                if attempt_apply "$r" "$ad" "1" "$SHAPE_FALLBACK"; then
+                  success=1; SELECTED_SUMMARY="region=$r ad=$ad ocpus=1 shape=$SHAPE_FALLBACK"; break 2
                 fi
               done
             fi

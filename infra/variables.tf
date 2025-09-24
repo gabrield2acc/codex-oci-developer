@@ -81,6 +81,12 @@ variable "memory_gbs" {
   default     = 12
 }
 
+variable "shape" {
+  description = "Compute shape (e.g., VM.Standard.A1.Flex or VM.Standard.E4.Flex)"
+  type        = string
+  default     = "VM.Standard.A1.Flex"
+}
+
 variable "tags" {
   description = "Freeform tags"
   type        = map(string)
