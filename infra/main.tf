@@ -110,16 +110,11 @@ data "oci_core_images" "ol9_aarch64" {
   shape                    = "VM.Standard.A1.Flex"
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
-  filter {
-    name   = "platform"
-    values = ["linux"]
-  }
 }
 
 resource "random_password" "rdp_password" {
-  length           = 16
-  special          = false
-  override_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+  length  = 16
+  special = false
 }
 
 locals {
