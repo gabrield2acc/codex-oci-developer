@@ -25,6 +25,9 @@ jobs:
       TF_VAR_compartment_ocid: ${{ secrets.OCI_COMPARTMENT_OCID }}
       TF_VAR_region: ${{ secrets.OCI_REGION }}
       TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+      TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+      TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+      TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
 
     steps:
       - name: Checkout
@@ -61,6 +64,7 @@ jobs:
         working-directory: infra
         env:
           OCI_PRIVATE_KEY_PATH: ${{ env.OCI_PRIVATE_KEY_PATH }}
+          TF_VAR_private_key_path: ${{ env.OCI_PRIVATE_KEY_PATH }}
         run: terraform apply -auto-approve -input=false
 
       - name: Save outputs to repo
@@ -89,4 +93,3 @@ jobs:
           else
             echo "outputs.json not found." >> $GITHUB_STEP_SUMMARY
           fi
-

@@ -8,6 +8,30 @@ variable "region" {
   type        = string
 }
 
+variable "tenancy_ocid" {
+  description = "OCI Tenancy OCID (for provider auth)"
+  type        = string
+  default     = ""
+}
+
+variable "user_ocid" {
+  description = "OCI User OCID (for provider auth)"
+  type        = string
+  default     = ""
+}
+
+variable "fingerprint" {
+  description = "OCI API key fingerprint (for provider auth)"
+  type        = string
+  default     = ""
+}
+
+variable "private_key_path" {
+  description = "Path to OCI API private key (for provider auth)"
+  type        = string
+  default     = ""
+}
+
 variable "ssh_public_key" {
   description = "SSH public key for opc user (optional)"
   type        = string
@@ -55,4 +79,3 @@ variable "tags" {
   type        = map(string)
   default     = { project = "dev-workstation" }
 }
-
