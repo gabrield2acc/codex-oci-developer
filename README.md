@@ -20,7 +20,10 @@ GitHub Actions expects these repository secrets:
 - `OCI_USER_OCID`
 - `OCI_FINGERPRINT`
 - `OCI_REGION`
-- `OCI_PRIVATE_KEY` (PEM content)
+- One of the following for the private key:
+  - `OCI_PRIVATE_KEY_B64` (base64-encoded PEM, preferred), or
+  - `OCI_PRIVATE_KEY_PEM` (base64-encoded PEM, alt name), or
+  - `OCI_PRIVATE_KEY` (raw PEM content; CI will base64-encode and also write a file fallback)
 - `OCI_COMPARTMENT_OCID`
 - Optional: `SSH_PUBLIC_KEY` (recommended). If omitted, an RDP password is generated.
 

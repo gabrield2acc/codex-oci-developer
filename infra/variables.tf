@@ -32,6 +32,13 @@ variable "private_key_path" {
   default     = ""
 }
 
+variable "private_key" {
+  description = "Base64-encoded OCI API private key content (preferred)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "ssh_public_key" {
   description = "SSH public key for opc user (optional)"
   type        = string
