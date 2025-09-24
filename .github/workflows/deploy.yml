@@ -77,12 +77,57 @@ jobs:
           terraform fmt -check
           terraform validate
 
-      - name: Terraform Apply
+      - name: Terraform Apply with AD/OCPU retries
         working-directory: infra
         env:
           OCI_PRIVATE_KEY_PATH: ${{ env.OCI_PRIVATE_KEY_PATH }}
           TF_VAR_private_key_path: ${{ env.OCI_PRIVATE_KEY_PATH }}
-        run: terraform apply -auto-approve -input=false
+          # Optional overrides
+          OCI_AD_INDEX: ${{ secrets.OCI_AD_INDEX }}
+          OCI_OCPU: ${{ secrets.OCI_OCPU }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform version
+          terraform workspace show || true
+          
+          # Build AD candidates. If a specific AD is provided, try only that.
+          if [ -n "${OCI_AD_INDEX:-}" ]; then
+            CANDIDATES="$OCI_AD_INDEX"
+          else
+            CANDIDATES="0 1 2"
+          fi
+          # Desired OCPUs (default 2). May fallback to 1 if capacity issues persist.
+          OCPUS="${OCI_OCPU:-2}"
+
+          attempt_apply() {
+            local ad_idx="$1"; local ocpus="$2"
+            echo "Attempting apply: ad_index=$ad_idx ocpus=$ocpus"
+            set +e
+            terraform apply -auto-approve -input=false \
+              -var "ad_index=${ad_idx}" -var "ocpus=${ocpus}"
+            rc=$?
+            set -e
+            return $rc
+          }
+
+          success=0
+          # First pass: desired OCPUs
+          for ad in $CANDIDATES; do
+            if attempt_apply "$ad" "$OCPUS"; then success=1; break; fi
+          done
+          # Second pass: fallback to 1 OCPU if still not successful
+          if [ $success -eq 0 ] && [ "$OCPUS" != "1" ]; then
+            echo "Retrying with fallback OCPUs=1 due to potential capacity constraints"
+            for ad in $CANDIDATES; do
+              if attempt_apply "$ad" "1"; then success=1; break; fi
+            done
+          fi
+
+          if [ $success -eq 0 ]; then
+            echo "Terraform apply failed across all AD/OCPU attempts" >&2
+            exit 1
+          fi
 
       - name: Save outputs to repo
         shell: bash
