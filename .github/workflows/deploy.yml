@@ -96,7 +96,8 @@ jobs:
           
           # Build region candidates: use secret list (space-separated) or the configured region.
           if [ -n "${OCI_REGION_CANDIDATES:-}" ]; then
-            REGIONS="$OCI_REGION_CANDIDATES"
+            # Use only the first region provided
+            REGIONS="$(set -- $OCI_REGION_CANDIDATES; echo $1)"
           else
             # Revert to single region: uk-london-1
             REGIONS="uk-london-1"
