@@ -137,7 +137,7 @@ resource "oci_core_instance" "dev" {
   shape               = var.shape
 
   dynamic "shape_config" {
-    for_each = contains(var.shape, ".Flex") ? [1] : []
+    for_each = length(regexall("\\.Flex", var.shape)) > 0 ? [1] : []
     content {
       ocpus         = var.ocpus
       memory_in_gbs = var.memory_gbs
