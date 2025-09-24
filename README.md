@@ -55,11 +55,12 @@ Notes
 - Oracle Linux user: `opc` (default). SSH remains key-only; password is used for xrdp only.
 - The monitoring stack is local to the VM by default. To expose Grafana/Prometheus, add rules to the security list and firewall.
 
-Capacity fallbacks
-- Primary shape defaults to `VM.Standard.A1.Flex` (ARM). CI can auto-fallback to `VM.Standard.E4.Flex` (x86) if A1 capacity is unavailable.
-- Configure optional secrets to influence retries:
-  - `OCI_REGION_CANDIDATES`: space-separated list of regions to try in order.
-  - `OCI_AD_INDEX`: pin a specific AD index.
+Capacity and region fallbacks (A1 only)
+- Shape stays `VM.Standard.A1.Flex` (ARM) to remain Always Free–eligible.
+- CI retries across nearby regions in order; default order if unset: `uk-london-1 eu-amsterdam-1 eu-frankfurt-1 eu-dublin-1 eu-paris-1 eu-milan-1`.
+- Optional secrets:
+  - `OCI_REGION_CANDIDATES`: custom region list.
+  - `OCI_AD_INDEX`: pin AD index.
   - `OCI_OCPU`: desired OCPUs (default 2).
   - `OCI_SHAPE_PRIMARY`: override primary shape (default A1 Flex).
-  - `OCI_SHAPE_FALLBACK`: override fallback shape (default E4 Flex).
+  - `OCI_ALLOW_OCPU_FALLBACK`: set to `true` to allow 1 OCPU fallback if capacity is tight.
