@@ -79,6 +79,39 @@ jobs:
           echo "OCI_PRIVATE_KEY_PATH=$HOME/.oci/oci_api_key.pem" >> $GITHUB_ENV
           echo "TF_VAR_private_key=$TF_B64_KEY" >> $GITHUB_ENV
 
+      - name: Diagnose OCI API key fingerprint
+        id: diag_fpr
+        shell: bash
+        env:
+          EXPECTED_FPR: ${{ env.OCI_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          KEY="$HOME/.oci/oci_api_key.pem"
+          if [ ! -s "$KEY" ]; then
+            echo "Key file missing: $KEY" >&2; exit 1
+          fi
+          # Generate public key DER from PEM (try rsa, then pkey)
+          if ! openssl rsa -pubout -outform DER -in "$KEY" -out /tmp/pubkey.der 2>/dev/null; then
+            openssl pkey -pubout -outform DER -in "$KEY" -out /tmp/pubkey.der 2>/dev/null
+          fi
+          if [ ! -s /tmp/pubkey.der ]; then
+            echo "Failed to derive public key DER from PEM" >&2; exit 1
+          fi
+          # Compute MD5 fingerprint in colon-separated form
+          RAW=$(openssl dgst -md5 -c /tmp/pubkey.der | sed 's/^.*= //')
+          COMPUTED_FPR=$(echo "$RAW" | tr 'A-F' 'a-f')
+          EXPECTED_NORM=$(echo "${EXPECTED_FPR:-}" | tr 'A-F' 'a-f')
+          echo "Computed fingerprint: $COMPUTED_FPR"
+          echo "Expected fingerprint: $EXPECTED_NORM"
+          echo "COMPUTED_FPR=$COMPUTED_FPR" >> $GITHUB_ENV
+          echo "### OCI API Key Fingerprint" >> $GITHUB_STEP_SUMMARY
+          echo "Computed: $COMPUTED_FPR" >> $GITHUB_STEP_SUMMARY
+          echo "Expected: $EXPECTED_NORM" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$EXPECTED_NORM" ] && [ "$COMPUTED_FPR" != "$EXPECTED_NORM" ]; then
+            echo "Fingerprint mismatch between provided private key and OCI_FINGERPRINT" >&2
+            exit 1
+          fi
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
